@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🎓 Fast Track Academy Community
+    url: https://github.com/Fast-Track-Academy/.github/discussions
+    about: Join discussions about learning strategies and educational innovations
+  - name: 📚 Learning Resources
+    url: https://github.com/Fast-Track-Academy/.github/wiki
+    about: Access comprehensive learning materials and guides

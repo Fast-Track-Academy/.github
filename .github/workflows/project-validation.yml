@@ -1,0 +1,144 @@
+name: Project Submission Validation
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'projects/**'
+      - 'student-work/**'
+
+jobs:
+  validate-submission:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check submission structure
+        run: |
+          echo "🔍 Validating project submission structure..."
+          
+          # Check for required files
+          REQUIRED_FILES=("README.md" "reflection.md")
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "❌ Missing required file: $file"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All required files present"
+
+      - name: Validate README content
+        run: |
+          echo "📖 Checking README.md content..."
+          
+          # Check for required sections
+          if ! grep -q "## Project Overview" README.md; then
+            echo "❌ Missing 'Project Overview' section in README.md"
+            exit 1
+          fi
+          
+          if ! grep -q "## Learning Objectives" README.md; then
+            echo "❌ Missing 'Learning Objectives' section in README.md"
+            exit 1
+          fi
+          
+          if ! grep -q "## Technical Implementation" README.md; then
+            echo "❌ Missing 'Technical Implementation' section in README.md"
+            exit 1
+          fi
+          
+          echo "✅ README.md structure validated"
+
+      - name: Check for reflection essay
+        run: |
+          echo "💭 Validating reflection essay..."
+          
+          if [[ ! -f "reflection.md" ]]; then
+            echo "❌ Reflection essay (reflection.md) is missing"
+            exit 1
+          fi
+          
+          WORD_COUNT=$(wc -w < reflection.md)
+          if [[ $WORD_COUNT -lt 300 ]]; then
+            echo "❌ Reflection essay is too short ($WORD_COUNT words). Minimum 300 words required."
+            exit 1
+          fi
+          
+          echo "✅ Reflection essay validated ($WORD_COUNT words)"
+
+      - name: Run code quality checks
+        if: contains(github.event.pull_request.changed_files, '.py') || contains(github.event.pull_request.changed_files, '.js') || contains(github.event.pull_request.changed_files, '.html')
+        run: |
+          echo "🔧 Running code quality checks..."
+          
+          # Check for Python files
+          if find . -name "*.py" -type f | head -1 | grep -q .; then
+            echo "🐍 Python files found - checking syntax..."
+            python -m py_compile $(find . -name "*.py" -type f)
+            echo "✅ Python syntax validated"
+          fi
+          
+          # Check for JavaScript files
+          if find . -name "*.js" -type f | head -1 | grep -q .; then
+            echo "🟨 JavaScript files found - checking syntax..."
+            # Basic syntax check for JS files
+            for file in $(find . -name "*.js" -type f); do
+              node -c "$file" || exit 1
+            done
+            echo "✅ JavaScript syntax validated"
+          fi
+
+      - name: Check for AI tool acknowledgment
+        run: |
+          echo "🤖 Checking for AI tool usage documentation..."
+          
+          if grep -qi "ai\|chatgpt\|claude\|copilot" README.md reflection.md; then
+            echo "✅ AI tool usage documented"
+          else
+            echo "⚠️  No AI tool usage mentioned. If you used AI tools, please document them."
+          fi
+
+      - name: Validate learning objectives completion
+        run: |
+          echo "🎯 Checking learning objectives completion..."
+          
+          # Look for checked boxes in learning objectives
+          if grep -q "- \[x\]" README.md; then
+            COMPLETED=$(grep -c "- \[x\]" README.md)
+            TOTAL=$(grep -c "- \[" README.md)
+            PERCENTAGE=$((COMPLETED * 100 / TOTAL))
+            
+            echo "📊 Learning objectives completion: $COMPLETED/$TOTAL ($PERCENTAGE%)"
+            
+            if [[ $PERCENTAGE -lt 80 ]]; then
+              echo "⚠️  Less than 80% of learning objectives completed"
+            else
+              echo "✅ Strong learning objectives completion"
+            fi
+          else
+            echo "⚠️  No completed learning objectives found (use [x] to mark complete)"
+          fi
+
+      - name: Generate feedback summary
+        run: |
+          echo "📝 Generating submission feedback..."
+          echo "## 🎓 Project Submission Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Validation Checks Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Project structure requirements met" >> $GITHUB_STEP_SUMMARY
+          echo "- Required documentation present" >> $GITHUB_STEP_SUMMARY
+          echo "- Code quality standards maintained" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Ready for Review" >> $GITHUB_STEP_SUMMARY
+          echo "This project submission meets all automated validation criteria and is ready for mentor review." >> $GITHUB_STEP_SUMMARY
+
+  notify-mentors:
+    needs: validate-submission
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Notify mentors of new submission
+        run: |
+          echo "📢 Notifying mentors of new project submission for review..."
+          # In a real implementation, this would send notifications via Discord, Slack, or email
