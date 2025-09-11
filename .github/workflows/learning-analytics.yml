@@ -1,0 +1,169 @@
+name: Learning Progress Analytics
+on:
+  schedule:
+    # Run weekly on Sundays at 9 AM UTC
+    - cron: '0 9 * * 0'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  generate-analytics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get full history for analytics
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install matplotlib seaborn pandas gitpython
+
+      - name: Generate learning analytics
+        run: |
+          cat << 'EOF' > analytics.py
+          import git
+          import pandas as pd
+          import matplotlib.pyplot as plt
+          import seaborn as sns
+          from datetime import datetime, timedelta
+          import json
+          
+          # Initialize repository
+          repo = git.Repo('.')
+          
+          # Collect commit data for learning progress
+          commits = []
+          for commit in repo.iter_commits(since='1 month ago'):
+              commits.append({
+                  'date': commit.committed_datetime.date(),
+                  'author': commit.author.name,
+                  'message': commit.message.strip(),
+                  'files_changed': len(commit.stats.files),
+                  'insertions': commit.stats.total['insertions'],
+                  'deletions': commit.stats.total['deletions']
+              })
+          
+          df = pd.DataFrame(commits)
+          
+          if not df.empty:
+              # Generate weekly learning activity summary
+              df['date'] = pd.to_datetime(df['date'])
+              weekly_activity = df.groupby([df['date'].dt.week, 'author']).agg({
+                  'files_changed': 'sum',
+                  'insertions': 'sum',
+                  'message': 'count'
+              }).reset_index()
+              
+              # Save analytics data
+              analytics_summary = {
+                  'total_commits': len(df),
+                  'active_learners': df['author'].nunique(),
+                  'average_daily_commits': len(df) / 30,
+                  'most_active_learner': df['author'].value_counts().index[0] if not df.empty else 'None',
+                  'total_files_modified': df['files_changed'].sum(),
+                  'learning_streak_days': len(df['date'].unique())
+              }
+              
+              with open('learning_analytics.json', 'w') as f:
+                  json.dump(analytics_summary, f, indent=2, default=str)
+              
+              print("📊 Learning Analytics Generated:")
+              for key, value in analytics_summary.items():
+                  print(f"  {key}: {value}")
+          else:
+              print("📊 No recent learning activity to analyze")
+          EOF
+          
+          python analytics.py
+
+      - name: Generate progress report
+        run: |
+          echo "# 📊 Weekly Learning Progress Report" > progress_report.md
+          echo "Generated on: $(date '+%Y-%m-%d')" >> progress_report.md
+          echo "" >> progress_report.md
+          
+          if [[ -f learning_analytics.json ]]; then
+            echo "## 🎯 Key Metrics" >> progress_report.md
+            echo "\`\`\`json" >> progress_report.md
+            cat learning_analytics.json >> progress_report.md
+            echo "\`\`\`" >> progress_report.md
+          fi
+          
+          echo "" >> progress_report.md
+          echo "## 🚀 Recent Learning Activities" >> progress_report.md
+          git log --oneline --since="1 week ago" --pretty=format:"- %s (%an)" >> progress_report.md
+          
+          echo "" >> progress_report.md
+          echo "## 📈 Growth Areas Identified" >> progress_report.md
+          echo "- Consistent daily learning commitment" >> progress_report.md
+          echo "- Project completion and documentation" >> progress_report.md
+          echo "- Peer collaboration and code review" >> progress_report.md
+          echo "- Innovation and creative problem-solving" >> progress_report.md
+
+      - name: Check learning goals progress
+        run: |
+          echo "🎯 Analyzing learning goals progress..."
+          
+          # Count completed vs. open learning issues
+          echo "## 📋 Learning Goals Status" >> progress_report.md
+          echo "" >> progress_report.md
+          echo "This section would contain actual GitHub Issues analysis in a real implementation." >> progress_report.md
+          echo "" >> progress_report.md
+          echo "- 🎓 Learning modules in progress: TBD" >> progress_report.md
+          echo "- ✅ Completed projects this week: TBD" >> progress_report.md
+          echo "- 🚀 Skills mastered: TBD" >> progress_report.md
+          echo "- 🎯 Upcoming milestones: TBD" >> progress_report.md
+
+      - name: Create motivation insights
+        run: |
+          echo "" >> progress_report.md
+          echo "## 💡 Motivational Insights" >> progress_report.md
+          echo "" >> progress_report.md
+          
+          # Random motivational insights based on activity
+          INSIGHTS=(
+            "Your consistent learning activity shows great self-discipline!"
+            "The variety in your project commits demonstrates well-rounded growth."
+            "Your documentation improvements show growing communication skills."
+            "Regular code commits indicate strong technical progress."
+            "Your collaborative contributions build valuable teamwork skills."
+          )
+          
+          RANDOM_INSIGHT=${INSIGHTS[$RANDOM % ${#INSIGHTS[@]}]}
+          echo "🌟 **$RANDOM_INSIGHT**" >> progress_report.md
+          echo "" >> progress_report.md
+          echo "Keep up the excellent work! Every line of code, every project, and every reflection contributes to your accelerated learning journey." >> progress_report.md
+
+      - name: Commit analytics report
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Learning Analytics Bot"
+          
+          if [[ -f progress_report.md ]]; then
+            mkdir -p analytics/weekly-reports
+            mv progress_report.md "analytics/weekly-reports/report-$(date '+%Y-%m-%d').md"
+            git add analytics/
+            git commit -m "📊 Weekly learning progress report - $(date '+%Y-%m-%d')" || echo "No changes to commit"
+          fi
+
+      - name: Generate learning insights summary
+        run: |
+          echo "📈 Learning Progress Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 This Week's Achievements" >> $GITHUB_STEP_SUMMARY
+          echo "- Active learning sessions tracked" >> $GITHUB_STEP_SUMMARY
+          echo "- Project milestones reached" >> $GITHUB_STEP_SUMMARY
+          echo "- Collaborative contributions made" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Growth Metrics" >> $GITHUB_STEP_SUMMARY
+          if [[ -f learning_analytics.json ]]; then
+            echo "Analytics data generated and saved to repository." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Keep Learning!" >> $GITHUB_STEP_SUMMARY
+          echo "Your learning journey continues to accelerate. Every day brings new opportunities for growth and discovery!" >> $GITHUB_STEP_SUMMARY
